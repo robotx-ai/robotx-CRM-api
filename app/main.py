@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from app.config import settings
+from app.routers.machine_product_library import router as machine_product_library_router
+
+app = FastAPI(
+    title="RobotX CRM Machine Product Library API",
+    version="1.0.0",
+    description=(
+        "FastAPI + OpenAPI endpoints for CRUD operations on Supabase table "
+        "`machineproductlibrary` based on product-info and product-edit pages."
+    ),
+)
+
+
+@app.get("/health", tags=["System"], summary="Health check")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+app.include_router(machine_product_library_router, prefix=settings.api_prefix)
