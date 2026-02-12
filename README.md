@@ -42,3 +42,13 @@ Optional:
 - `POST /api/v1/machine-product-library`
 - `PATCH /api/v1/machine-product-library/{row_id}`
 - `DELETE /api/v1/machine-product-library/{row_id}`
+
+## Store Management Endpoints
+
+- `GET /api/v1/customerCenter/storeManagement`
+- `GET /api/v1/customerCenter/storeManagement/agents/options`
+- `GET /api/v1/customerCenter/storeManagement/{store_id}`
+- `GET /api/v1/customerCenter/storeManagement/{store_id}/accounts`
+- `POST /api/v1/customerCenter/storeManagement`
+- `PATCH /api/v1/customerCenter/storeManagement/{store_id}`
+- `DELETE /api/v1/customerCenter/storeManagement/{store_id}`
