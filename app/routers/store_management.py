@@ -70,7 +70,11 @@ async def list_store_management_rows(
         agent = row.get("agents") or {}
         agent_id = str(row.get("agent_id")) if row.get("agent_id") else None
         row_metrics = metrics.get(agent_id or "", {"store_count": 0, "binding_count": 0, "client_count": 0})
-        row_status = service.derive_status(binding_count=row_metrics["binding_count"])
+        row_status = service.derive_status(
+            binding_count=row_metrics["binding_count"],
+            authorization_code=row.get("code"),
+            store_name=row.get("name"),
+        )
 
         if status_value and row_status != status_value:
             continue
