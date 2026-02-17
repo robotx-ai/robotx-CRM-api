@@ -131,6 +131,7 @@ class StoreManagementQuery(BaseModel):
     keyword: str | None = Field(default=None, description="Store name/code fuzzy keyword")
     agent_name_or_account: str | None = None
     client_count: int | None = Field(default=None, ge=0)
+    company_location: str | None = None
     status: StoreStatus | None = None
     sales_area: str | None = None
     created_date: str | None = Field(default=None, description="YYYY-MM-DD")

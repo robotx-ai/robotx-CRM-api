@@ -37,20 +37,24 @@ async def list_store_management_rows(
     keyword: str | None = Query(default=None),
     agent_name_or_account: str | None = Query(default=None),
     client_count: int | None = Query(default=None, ge=0),
+    company_location: str | None = Query(default=None),
     status_value: StoreStatus | None = Query(default=None, alias="status"),
     sales_area: str | None = Query(default=None),
     created_date: str | None = Query(default=None, description="YYYY-MM-DD"),
+    creation_time: str | None = Query(default=None, description="YYYY-MM-DD"),
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     order_by: str = Query(default="created_at.desc.nullslast"),
 ) -> StoreManagementListResponse:
+    resolved_created_date = created_date or creation_time
+
     try:
-        total, rows = await service.list_store_cards(
+        _, rows = await service.list_store_cards(
             keyword=keyword,
             agent_name_or_account=agent_name_or_account,
-            created_date=created_date,
-            limit=limit,
-            offset=offset,
+            created_date=resolved_created_date,
+            limit=10_000,
+            offset=0,
             order_by=order_by,
         )
     except SupabaseRestError as exc:
@@ -65,7 +69,7 @@ async def list_store_management_rows(
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    items: list[StoreManagementListItem] = []
+    filtered_items: list[StoreManagementListItem] = []
     for row in rows:
         agent = row.get("agents") or {}
         agent_id = str(row.get("agent_id")) if row.get("agent_id") else None
@@ -80,8 +84,18 @@ async def list_store_management_rows(
             continue
         if client_count is not None and row_metrics["client_count"] != client_count:
             continue
+        row_company_location = row.get("company_location") or agent.get("company_location")
+        if company_location:
+            location_keyword = company_location.strip().lower()
+            location_value = str(row_company_location or "").lower()
+            if location_keyword not in location_value:
+                continue
+        row_sales_area = row.get("sales_area") or agent.get("sales_area")
+        if sales_area:
+            if str(row_sales_area or "").lower() != sales_area.strip().lower():
+                continue
 
-        items.append(
+        filtered_items.append(
             StoreManagementListItem(
                 store_id=row["id"],
                 store_name=row.get("name") or "",
@@ -90,8 +104,8 @@ async def list_store_management_rows(
                 agent_company_name=agent.get("name"),
                 proxy_account=agent.get("email"),
                 client_count=row_metrics["client_count"],
-                company_location=None,
-                sales_area=sales_area,
+                company_location=row_company_location,
+                sales_area=row_sales_area,
                 store_count=row_metrics["store_count"],
                 binding_count=row_metrics["binding_count"],
                 superior_agent_name=None,
@@ -100,8 +114,9 @@ async def list_store_management_rows(
             )
         )
 
-    total_value = len(items) if status_value is not None or client_count is not None else total
-    return StoreManagementListResponse(total=total_value, items=items)
+    total_value = len(filtered_items)
+    paged_items = filtered_items[offset : offset + limit]
+    return StoreManagementListResponse(total=total_value, items=paged_items)
 
 
 @router.get(

@@ -11,7 +11,10 @@ from app.models.machine_product_library import (
 )
 from app.services.supabase_rest import SupabaseRestClient, SupabaseRestError
 
-router = APIRouter(prefix="/machine-product-library", tags=["Machine Product Library"])
+router = APIRouter(
+    prefix="/productCenter/machineProductLibrary",
+    tags=["Machine Product Library"],
+)
 client = SupabaseRestClient()
 
 
