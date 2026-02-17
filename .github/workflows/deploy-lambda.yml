@@ -1,0 +1,51 @@
+name: Deploy Lambda From Main
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - app/**
+      - Dockerfile.lambda
+      - lambda_handler.py
+      - requirements.txt
+      - scripts/deploy_lambda.sh
+      - .github/workflows/deploy-lambda.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate required variables
+        run: |
+          test -n "$AWS_REGION"
+          test -n "$ECR_REPOSITORY"
+          test -n "$LAMBDA_FUNCTION_NAME"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Deploy image to ECR and publish Lambda version
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: ./scripts/deploy_lambda.sh
+
