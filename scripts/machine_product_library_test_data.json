@@ -1,0 +1,35 @@
+[
+  {
+    "sn_pid": "MPL-TEST-0001",
+    "status": "active",
+    "product_name": "PUDU CC1 Pro",
+    "product_nickname": "CC1 Demo A",
+    "software_version": "SC5.14.46.2512092039-cc1",
+    "firmware_version": "22.2.12",
+    "use_type": "Purchase",
+    "site_use": "Restaurant",
+    "warranty_months": 12
+  },
+  {
+    "sn_pid": "MPL-TEST-0002",
+    "status": "idle",
+    "product_name": "PUDU MT1 Max",
+    "product_nickname": "MT1 Max Demo",
+    "software_version": "SC5.17.13.2511182031-mt1",
+    "firmware_version": "22.2.40",
+    "use_type": "Lease",
+    "site_use": "Warehouse",
+    "warranty_months": 24
+  },
+  {
+    "sn_pid": "MPL-TEST-0003",
+    "status": "offline",
+    "product_name": "PUDU MT1 Vac",
+    "product_nickname": "MT1 Vac QA",
+    "software_version": "SC5.16.11.2510101914-mt1",
+    "firmware_version": "22.2.39",
+    "use_type": "Trial",
+    "site_use": "Office",
+    "warranty_months": 6
+  }
+]
