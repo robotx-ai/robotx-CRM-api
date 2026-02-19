@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.routers.machine_product_library import router as machine_product_library_router
+from app.routers.sales_leads import router as sales_leads_router
 from app.routers.store_management import router as store_management_router
 
 app = FastAPI(
@@ -23,3 +24,4 @@ def health() -> dict[str, str]:
 
 app.include_router(machine_product_library_router, prefix=settings.api_prefix)
 app.include_router(store_management_router, prefix=settings.api_prefix)
+app.include_router(sales_leads_router, prefix=settings.api_prefix)
