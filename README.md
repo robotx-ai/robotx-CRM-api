@@ -52,3 +52,24 @@ Optional:
 - `POST /api/v1/customerCenter/storeManagement`
 - `PATCH /api/v1/customerCenter/storeManagement/{store_id}`
 - `DELETE /api/v1/customerCenter/storeManagement/{store_id}`
+
+## Sales Leads Endpoints
+
+- `GET /api/v1/customerCenter/salesLeads`
+- `GET /api/v1/customerCenter/salesLeads/{lead_id}`
+- `POST /api/v1/customerCenter/salesLeads`
+- `PATCH /api/v1/customerCenter/salesLeads/{lead_id}`
+- `DELETE /api/v1/customerCenter/salesLeads/{lead_id}`
+
+## Sales Lead Follow-ups Endpoints
+
+- `GET /api/v1/customerCenter/salesLeads/{lead_id}/followups`
+- `GET /api/v1/customerCenter/salesLeads/{lead_id}/followups/{followup_id}`
+- `POST /api/v1/customerCenter/salesLeads/{lead_id}/followups`
+- `DELETE /api/v1/customerCenter/salesLeads/{lead_id}/followups/{followup_id}`
+
+## SQL Scripts
+
+- `sql/001_create_sales_lead_followups.sql`: creates `sales_lead_followups` table.
+- `sql/002_seed_mock_sales_lead_followups.sql`: seeds mock follow-up notes for leads in
+  `Following Up` and `Lost` statuses.

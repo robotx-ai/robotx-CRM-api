@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
-
 from fastapi import APIRouter, Header, HTTPException, Query, status
 
 from app.models.sales_leads import (
@@ -14,28 +12,12 @@ from app.models.sales_leads import (
     SalesLeadRead,
     SalesLeadUpdate,
 )
+from app.routers._auth import parse_user_id_or_401
 from app.services.sales_leads import SalesLeadsService
 from app.services.supabase_rest import SupabaseRestError
 
 router = APIRouter(prefix="/customerCenter/salesLeads", tags=["Sales Leads"])
 service = SalesLeadsService()
-
-
-def parse_user_id_or_401(x_robotx_user_id: str | None) -> str:
-    raw_user_id = service.parse_owner_user_id(x_robotx_user_id)
-    if not raw_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing x-robotx-user-id header",
-        )
-
-    try:
-        return str(UUID(raw_user_id))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid x-robotx-user-id header",
-        ) from exc
 
 
 @router.get(
