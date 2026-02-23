@@ -92,6 +92,27 @@ class StoreAgentOptionListResponse(BaseModel):
     items: list[StoreAgentOption]
 
 
+class SubordinateAgentListItem(BaseModel):
+    agent_id: UUID
+    agent_company_name: str
+    proxy_account: str | None = None
+
+    client_count: int = 0
+    company_location: str | None = None
+    sales_area: str | None = None
+    store_count: int = 0
+    binding_count: int = 0
+    superior_agent_name: str | None = None
+
+    created_at: datetime | None = None
+    status: StoreStatus = "active"
+
+
+class SubordinateAgentListResponse(BaseModel):
+    total: int
+    items: list[SubordinateAgentListItem]
+
+
 class StoreManagementCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

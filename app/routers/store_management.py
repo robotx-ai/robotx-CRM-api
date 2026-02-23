@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 
 from app.models.store_management import (
     StoreStatus,
@@ -17,6 +17,7 @@ from app.models.store_management import (
     StoreMerchantInfo,
     StoreShopInfo,
 )
+from app.routers._auth import parse_user_id_or_401
 from app.services.store_management import StoreManagementService
 from app.services.supabase_rest import SupabaseRestError
 
@@ -45,11 +46,14 @@ async def list_store_management_rows(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     order_by: str = Query(default="created_at.desc.nullslast"),
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
 ) -> StoreManagementListResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     resolved_created_date = created_date or creation_time
 
     try:
         _, rows = await service.list_store_cards(
+            owner_user_id=owner_user_id,
             keyword=keyword,
             agent_name_or_account=agent_name_or_account,
             created_date=resolved_created_date,
@@ -65,7 +69,7 @@ async def list_store_management_rows(
 
     agent_ids = sorted({str(item.get("agent_id")) for item in rows if item.get("agent_id")})
     try:
-        metrics = await service.build_agent_metrics(agent_ids)
+        metrics = await service.build_agent_metrics(agent_ids, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -127,9 +131,15 @@ async def list_store_management_rows(
 async def list_store_agent_options(
     keyword: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
 ) -> StoreAgentOptionListResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        items = await service.list_agent_options(keyword=keyword, limit=limit)
+        items = await service.list_agent_options(
+            owner_user_id=owner_user_id,
+            keyword=keyword,
+            limit=limit,
+        )
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -142,9 +152,13 @@ async def list_store_agent_options(
     summary="Get store details",
     description="Used by customerCenter/storeManagement/view page.",
 )
-async def get_store_detail(store_id: str) -> StoreManagementDetailResponse:
+async def get_store_detail(
+    store_id: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> StoreManagementDetailResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        row = await service.get_store_by_id(store_id)
+        row = await service.get_store_by_id(store_id, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -184,9 +198,13 @@ async def get_store_detail(store_id: str) -> StoreManagementDetailResponse:
     summary="List store accounts",
     description="Used by customerCenter/storeManagement/view account tab.",
 )
-async def list_store_accounts(store_id: str) -> StoreManagementAccountListResponse:
+async def list_store_accounts(
+    store_id: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> StoreManagementAccountListResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        row = await service.get_store_by_id(store_id)
+        row = await service.get_store_by_id(store_id, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -204,9 +222,14 @@ async def list_store_accounts(store_id: str) -> StoreManagementAccountListRespon
     summary="Create a store",
     description="Used by customerCenter/storeManagement/add page save action.",
 )
-async def create_store(payload: StoreManagementCreate) -> StoreManagementCreateResponse:
+async def create_store(
+    payload: StoreManagementCreate,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> StoreManagementCreateResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
         resolved_agent_id = await service.ensure_agent(
+            owner_user_id=owner_user_id,
             agent_id=service.parse_uuid(payload.agent_id),
             agent_name=payload.agent_name,
         )
@@ -214,6 +237,7 @@ async def create_store(payload: StoreManagementCreate) -> StoreManagementCreateR
         create_payload: dict[str, Any] = {
             "name": payload.store_name,
             "code": payload.authorization_code or service.generate_store_code(),
+            "owner_user_id": owner_user_id,
         }
         if resolved_agent_id:
             create_payload["agent_id"] = resolved_agent_id
@@ -238,7 +262,9 @@ async def create_store(payload: StoreManagementCreate) -> StoreManagementCreateR
 async def update_store(
     store_id: str,
     payload: StoreManagementUpdate,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
 ) -> StoreManagementCreateResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     update_data = payload.model_dump(exclude_none=True)
     if "agent_id" in update_data:
         update_data["agent_id"] = service.parse_uuid(update_data["agent_id"])
@@ -251,7 +277,7 @@ async def update_store(
         raise HTTPException(status_code=400, detail="No fields provided for update")
 
     try:
-        row = await service.update_store(store_id, update_data)
+        row = await service.update_store(store_id, owner_user_id=owner_user_id, payload=update_data)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -272,9 +298,13 @@ async def update_store(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete store",
 )
-async def delete_store(store_id: str) -> None:
+async def delete_store(
+    store_id: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> None:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        deleted = await service.delete_store(store_id)
+        deleted = await service.delete_store(store_id, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

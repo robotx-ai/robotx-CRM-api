@@ -133,7 +133,17 @@ class AuthService:
             full_name=normalized_name,
         )
 
-        user = auth_data.get('user') if isinstance(auth_data, dict) else None
+        # Supabase signup payload can be either:
+        # 1) {"user": {...}, "session": ...}
+        # 2) top-level user object with "id"/"email" fields
+        user: dict[str, Any] | None = None
+        if isinstance(auth_data, dict):
+            nested_user = auth_data.get('user')
+            if isinstance(nested_user, dict):
+                user = nested_user
+            elif auth_data.get('id'):
+                user = auth_data
+
         if not isinstance(user, dict) or not user.get('id'):
             raise SupabaseRestError('Unexpected auth signup payload.')
 

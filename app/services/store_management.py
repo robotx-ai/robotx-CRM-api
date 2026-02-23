@@ -87,24 +87,10 @@ class StoreManagementService:
 
         return total, data
 
-    async def _find_agent_ids_by_keyword(self, keyword: str) -> list[str]:
-        escaped = keyword.replace(",", "").replace("(", "").replace(")", "")
-        data = await self._request(
-            "GET",
-            "agents",
-            params={
-                "select": "id",
-                "or": f"(name.ilike.*{escaped}*,email.ilike.*{escaped}*)",
-                "limit": 200,
-            },
-        )
-        if not isinstance(data, list):
-            raise SupabaseRestError("Unexpected agent lookup payload.")
-        return [str(item["id"]) for item in data if item.get("id")]
-
     async def list_store_cards(
         self,
         *,
+        owner_user_id: str,
         keyword: str | None,
         agent_name_or_account: str | None,
         created_date: str | None,
@@ -117,18 +103,12 @@ class StoreManagementService:
             "limit": limit,
             "offset": offset,
             "order": order_by,
+            "owner_user_id": f"eq.{owner_user_id}",
         }
 
         if keyword:
             escaped = keyword.replace(",", "").replace("(", "").replace(")", "")
             params["or"] = f"(name.ilike.*{escaped}*,code.ilike.*{escaped}*)"
-
-        if agent_name_or_account:
-            agent_ids = await self._find_agent_ids_by_keyword(agent_name_or_account)
-            if not agent_ids:
-                return 0, []
-            joined = ",".join(agent_ids)
-            params["agent_id"] = f"in.({joined})"
 
         if created_date:
             params["and"] = (
@@ -136,9 +116,25 @@ class StoreManagementService:
                 f"created_at.lt.{created_date}T23:59:59.999Z)"
             )
 
-        return await self._list_rows("stores", params=params)
+        total, rows = await self._list_rows("stores", params=params)
+        if not agent_name_or_account:
+            return total, rows
 
-    async def list_all_stores_for_agents(self, agent_ids: list[str]) -> list[dict[str, Any]]:
+        agent_keyword = agent_name_or_account.strip().lower()
+        filtered_rows = []
+        for row in rows:
+            agent = row.get("agents") or {}
+            if isinstance(agent, list):
+                agent = agent[0] if agent else {}
+            haystack = f"{agent.get('name', '')} {agent.get('email', '')}".lower()
+            if agent_keyword in haystack:
+                filtered_rows.append(row)
+
+        return len(filtered_rows), filtered_rows
+
+    async def list_all_stores_for_agents(
+        self, agent_ids: list[str], *, owner_user_id: str
+    ) -> list[dict[str, Any]]:
         if not agent_ids:
             return []
         joined = ",".join(agent_ids)
@@ -148,6 +144,7 @@ class StoreManagementService:
             params={
                 "select": "id,agent_id",
                 "agent_id": f"in.({joined})",
+                "owner_user_id": f"eq.{owner_user_id}",
                 "limit": 10000,
             },
         )
@@ -155,7 +152,9 @@ class StoreManagementService:
             raise SupabaseRestError("Unexpected stores payload.")
         return data
 
-    async def list_machine_bindings(self, store_ids: list[str]) -> list[dict[str, Any]]:
+    async def list_machine_bindings(
+        self, store_ids: list[str], *, owner_user_id: str
+    ) -> list[dict[str, Any]]:
         if not store_ids:
             return []
         joined = ",".join(store_ids)
@@ -165,6 +164,7 @@ class StoreManagementService:
             params={
                 "select": "store_id,status",
                 "store_id": f"in.({joined})",
+                "owner_user_id": f"eq.{owner_user_id}",
                 "limit": 10000,
             },
         )
@@ -172,12 +172,13 @@ class StoreManagementService:
             raise SupabaseRestError("Unexpected machine bindings payload.")
         return data
 
-    async def get_store_by_id(self, store_id: str) -> dict[str, Any] | None:
+    async def get_store_by_id(self, store_id: str, *, owner_user_id: str) -> dict[str, Any] | None:
         data = await self._request(
             "GET",
             "stores",
             params={
                 "id": f"eq.{store_id}",
+                "owner_user_id": f"eq.{owner_user_id}",
                 "limit": 1,
                 "select": "id,name,code,created_at,agent_id,agents(id,name,email,created_at)",
             },
@@ -186,23 +187,205 @@ class StoreManagementService:
             raise SupabaseRestError("Unexpected get store payload.")
         return data[0] if data else None
 
-    async def list_agent_options(self, *, keyword: str | None, limit: int) -> list[dict[str, Any]]:
+    async def list_agent_options(
+        self,
+        *,
+        owner_user_id: str,
+        keyword: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        owned_stores = await self._request(
+            "GET",
+            "stores",
+            params={
+                "select": "agent_id",
+                "owner_user_id": f"eq.{owner_user_id}",
+                "limit": 10000,
+            },
+        )
+        if not isinstance(owned_stores, list):
+            raise SupabaseRestError("Unexpected owned stores payload.")
+        owned_agent_ids = sorted(
+            {str(row.get("agent_id")) for row in owned_stores if row.get("agent_id")}
+        )
+
         params: dict[str, str | int] = {
             "select": "id,name,email",
             "order": "created_at.desc.nullslast",
-            "limit": limit,
+            "limit": 1000,
         }
-        if keyword:
-            escaped = keyword.replace(",", "").replace("(", "").replace(")", "")
-            params["or"] = f"(name.ilike.*{escaped}*,email.ilike.*{escaped}*)"
+        if owned_agent_ids:
+            params["or"] = f"(user_id.eq.{owner_user_id},id.in.({','.join(owned_agent_ids)}))"
+        else:
+            params["user_id"] = f"eq.{owner_user_id}"
 
         data = await self._request("GET", "agents", params=params)
         if not isinstance(data, list):
             raise SupabaseRestError("Unexpected list agent options payload.")
-        return data
 
-    async def ensure_agent(self, *, agent_id: str | None, agent_name: str | None) -> str | None:
+        if keyword:
+            keyword_lower = keyword.strip().lower()
+            data = [
+                row
+                for row in data
+                if keyword_lower
+                in f"{row.get('name', '')} {row.get('email', '')}".lower()
+            ]
+
+        return data[:limit]
+
+    async def list_subordinate_agents(
+        self,
+        *,
+        owner_user_id: str,
+        keyword: str | None,
+        status: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        owned_stores = await self._request(
+            "GET",
+            "stores",
+            params={
+                "select": "id,agent_id",
+                "owner_user_id": f"eq.{owner_user_id}",
+                "limit": 10000,
+            },
+        )
+        if not isinstance(owned_stores, list):
+            raise SupabaseRestError("Unexpected owned stores payload.")
+
+        owned_agent_ids = sorted(
+            {str(row.get("agent_id")) for row in owned_stores if row.get("agent_id")}
+        )
+        store_ids = [str(row.get("id")) for row in owned_stores if row.get("id")]
+        store_to_agent: dict[str, str] = {
+            str(row["id"]): str(row["agent_id"])
+            for row in owned_stores
+            if row.get("id") and row.get("agent_id")
+        }
+        store_counter = Counter(
+            str(row["agent_id"]) for row in owned_stores if row.get("agent_id")
+        )
+
+        binding_counter: Counter[str] = Counter()
+        machine_rows = await self.list_machine_bindings(store_ids, owner_user_id=owner_user_id)
+        for row in machine_rows:
+            raw_store_id = row.get("store_id")
+            if not raw_store_id:
+                continue
+            agent_id = store_to_agent.get(str(raw_store_id))
+            if agent_id:
+                binding_counter[agent_id] += 1
+
+        params: dict[str, str | int] = {
+            "select": "id,name,email,created_at,user_id",
+            "order": "created_at.desc.nullslast",
+            "limit": 1000,
+        }
+        if owned_agent_ids:
+            params["or"] = f"(user_id.eq.{owner_user_id},id.in.({','.join(owned_agent_ids)}))"
+        else:
+            params["user_id"] = f"eq.{owner_user_id}"
+
+        agent_rows = await self._request("GET", "agents", params=params)
+        if not isinstance(agent_rows, list):
+            raise SupabaseRestError("Unexpected subordinate agents payload.")
+
+        if owned_agent_ids:
+            agent_ids_in_payload = {str(row.get("id")) for row in agent_rows if row.get("id")}
+            missing_owned_ids = [agent_id for agent_id in owned_agent_ids if agent_id not in agent_ids_in_payload]
+            for missing_id in missing_owned_ids:
+                agent_rows.append({"id": missing_id, "name": missing_id, "email": None, "created_at": None})
+
+        keyword_value = keyword.strip().lower() if keyword else None
+        status_value = status.strip().lower() if status else None
+
+        items: list[dict[str, Any]] = []
+        for row in agent_rows:
+            raw_agent_id = row.get("id")
+            if not raw_agent_id:
+                continue
+            agent_id = str(raw_agent_id)
+            store_count = int(store_counter.get(agent_id, 0))
+            binding_count = int(binding_counter.get(agent_id, 0))
+            row_status = self.derive_status(binding_count=binding_count)
+
+            if status_value and row_status != status_value:
+                continue
+
+            agent_name = str(row.get("name") or "").strip() or f"Agent {agent_id[:8]}"
+            proxy_account = row.get("email")
+            if keyword_value:
+                haystack = f"{agent_name} {proxy_account or ''}".lower()
+                if keyword_value not in haystack:
+                    continue
+
+            items.append(
+                {
+                    "agent_id": agent_id,
+                    "agent_company_name": agent_name,
+                    "proxy_account": proxy_account,
+                    "client_count": store_count,
+                    "company_location": None,
+                    "sales_area": None,
+                    "store_count": store_count,
+                    "binding_count": binding_count,
+                    "superior_agent_name": None,
+                    "created_at": row.get("created_at"),
+                    "status": row_status,
+                }
+            )
+
+        items.sort(
+            key=lambda item: (
+                item.get("created_at") is None,
+                item.get("created_at") or "",
+            ),
+            reverse=True,
+        )
+        total = len(items)
+        return total, items[offset : offset + limit]
+
+    async def ensure_agent(
+        self,
+        *,
+        owner_user_id: str,
+        agent_id: str | None,
+        agent_name: str | None,
+    ) -> str | None:
         if agent_id:
+            existing = await self._request(
+                "GET",
+                "agents",
+                params={
+                    "id": f"eq.{agent_id}",
+                    "select": "id,user_id",
+                    "limit": 1,
+                },
+            )
+            if not isinstance(existing, list):
+                raise SupabaseRestError("Unexpected find agent payload.")
+            if not existing:
+                return None
+            agent_user_id = existing[0].get("user_id")
+            if agent_user_id and str(agent_user_id) != owner_user_id:
+                return None
+            if not agent_user_id:
+                linked_store = await self._request(
+                    "GET",
+                    "stores",
+                    params={
+                        "select": "id",
+                        "owner_user_id": f"eq.{owner_user_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "limit": 1,
+                    },
+                )
+                if not isinstance(linked_store, list):
+                    raise SupabaseRestError("Unexpected linked store lookup payload.")
+                if not linked_store:
+                    return None
             return agent_id
 
         if not agent_name:
@@ -211,7 +394,12 @@ class StoreManagementService:
         existing = await self._request(
             "GET",
             "agents",
-            params={"name": f"eq.{agent_name}", "select": "id", "limit": 1},
+            params={
+                "name": f"eq.{agent_name}",
+                "user_id": f"eq.{owner_user_id}",
+                "select": "id",
+                "limit": 1,
+            },
         )
         if not isinstance(existing, list):
             raise SupabaseRestError("Unexpected find agent payload.")
@@ -221,7 +409,7 @@ class StoreManagementService:
         created = await self._request(
             "POST",
             "agents",
-            json={"name": agent_name},
+            json={"name": agent_name, "user_id": owner_user_id},
             prefer="return=representation",
         )
         if not isinstance(created, list) or not created:
@@ -239,11 +427,17 @@ class StoreManagementService:
             raise SupabaseRestError("Unexpected create store payload.")
         return data[0]
 
-    async def update_store(self, store_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    async def update_store(
+        self,
+        store_id: str,
+        *,
+        owner_user_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
         data = await self._request(
             "PATCH",
             "stores",
-            params={"id": f"eq.{store_id}"},
+            params={"id": f"eq.{store_id}", "owner_user_id": f"eq.{owner_user_id}"},
             json=payload,
             prefer="return=representation",
         )
@@ -251,19 +445,21 @@ class StoreManagementService:
             raise SupabaseRestError("Unexpected update store payload.")
         return data[0] if data else None
 
-    async def delete_store(self, store_id: str) -> bool:
+    async def delete_store(self, store_id: str, *, owner_user_id: str) -> bool:
         data = await self._request(
             "DELETE",
             "stores",
-            params={"id": f"eq.{store_id}"},
+            params={"id": f"eq.{store_id}", "owner_user_id": f"eq.{owner_user_id}"},
             prefer="return=representation",
         )
         if not isinstance(data, list):
             raise SupabaseRestError("Unexpected delete store payload.")
         return len(data) > 0
 
-    async def build_agent_metrics(self, agent_ids: list[str]) -> dict[str, dict[str, int]]:
-        stores = await self.list_all_stores_for_agents(agent_ids)
+    async def build_agent_metrics(
+        self, agent_ids: list[str], *, owner_user_id: str
+    ) -> dict[str, dict[str, int]]:
+        stores = await self.list_all_stores_for_agents(agent_ids, owner_user_id=owner_user_id)
         if not stores:
             return {}
 
@@ -278,7 +474,7 @@ class StoreManagementService:
             str(item["agent_id"]) for item in stores if item.get("agent_id")
         )
 
-        machine_rows = await self.list_machine_bindings(store_ids)
+        machine_rows = await self.list_machine_bindings(store_ids, owner_user_id=owner_user_id)
         binding_counter: Counter[str] = Counter()
         for row in machine_rows:
             raw_store_id = row.get("store_id")

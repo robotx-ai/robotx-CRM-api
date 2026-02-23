@@ -58,13 +58,20 @@ class SupabaseRestClient:
             return response.json()
         return response.text
 
-    async def list_rows(self, params: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+    async def list_rows(
+        self,
+        params: dict[str, Any],
+        *,
+        owner_user_id: str,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        scoped_params = dict(params)
+        scoped_params["owner_user_id"] = f"eq.{owner_user_id}"
         url = f"{self._base_url}/{self._table}"
         headers = dict(self._headers)
         headers["Prefer"] = "count=exact"
 
         async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(url, params=params, headers=headers)
+            response = await client.get(url, params=scoped_params, headers=headers)
 
         if response.status_code >= 400:
             raise SupabaseRestError(
@@ -84,11 +91,16 @@ class SupabaseRestClient:
                 total = len(data)
         return total, data
 
-    async def get_by_id(self, row_id: str) -> dict[str, Any] | None:
+    async def get_by_id(self, row_id: str, *, owner_user_id: str) -> dict[str, Any] | None:
         data = await self._request(
             "GET",
             self._table,
-            params={"id": f"eq.{row_id}", "limit": 1, "select": "*"},
+            params={
+                "id": f"eq.{row_id}",
+                "owner_user_id": f"eq.{owner_user_id}",
+                "limit": 1,
+                "select": "*",
+            },
         )
         if not data:
             return None
@@ -96,11 +108,16 @@ class SupabaseRestClient:
             raise SupabaseRestError("Unexpected get response payload.")
         return data[0] if data else None
 
-    async def get_by_sn(self, sn_pid: str) -> dict[str, Any] | None:
+    async def get_by_sn(self, sn_pid: str, *, owner_user_id: str) -> dict[str, Any] | None:
         data = await self._request(
             "GET",
             self._table,
-            params={"sn_pid": f"eq.{sn_pid}", "limit": 1, "select": "*"},
+            params={
+                "sn_pid": f"eq.{sn_pid}",
+                "owner_user_id": f"eq.{owner_user_id}",
+                "limit": 1,
+                "select": "*",
+            },
         )
         if not data:
             return None
@@ -119,11 +136,17 @@ class SupabaseRestClient:
             raise SupabaseRestError("Unexpected create response payload.")
         return data[0]
 
-    async def update_row(self, row_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    async def update_row(
+        self,
+        row_id: str,
+        payload: dict[str, Any],
+        *,
+        owner_user_id: str,
+    ) -> dict[str, Any] | None:
         data = await self._request(
             "PATCH",
             self._table,
-            params={"id": f"eq.{row_id}"},
+            params={"id": f"eq.{row_id}", "owner_user_id": f"eq.{owner_user_id}"},
             json=payload,
             extra_headers={"Prefer": "return=representation"},
         )
@@ -131,11 +154,11 @@ class SupabaseRestClient:
             raise SupabaseRestError("Unexpected update response payload.")
         return data[0] if data else None
 
-    async def delete_row(self, row_id: str) -> bool:
+    async def delete_row(self, row_id: str, *, owner_user_id: str) -> bool:
         data = await self._request(
             "DELETE",
             self._table,
-            params={"id": f"eq.{row_id}"},
+            params={"id": f"eq.{row_id}", "owner_user_id": f"eq.{owner_user_id}"},
             extra_headers={"Prefer": "return=representation"},
         )
         if not isinstance(data, list):

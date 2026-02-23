@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 
 from app.models.machine_product_library import (
     MachineProductLibraryCreate,
@@ -9,6 +9,7 @@ from app.models.machine_product_library import (
     MachineProductLibraryUpdate,
     StoreScope,
 )
+from app.routers._auth import parse_user_id_or_401
 from app.services.supabase_rest import SupabaseRestClient, SupabaseRestError
 
 router = APIRouter(
@@ -35,7 +36,9 @@ async def list_machine_products(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     order_by: str = Query(default="import_time.desc.nullslast"),
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
 ) -> MachineProductLibraryListResponse:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     params: dict[str, str | int] = {
         "select": "*",
         "limit": limit,
@@ -65,7 +68,7 @@ async def list_machine_products(
         params["store_id"] = "is.null"
 
     try:
-        total, items = await client.list_rows(params=params)
+        total, items = await client.list_rows(params=params, owner_user_id=owner_user_id)
         return MachineProductLibraryListResponse(total=total, items=items)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -76,9 +79,13 @@ async def list_machine_products(
     response_model=MachineProductLibraryRead,
     summary="Get machine product by ID",
 )
-async def get_machine_product(row_id: str) -> MachineProductLibraryRead:
+async def get_machine_product(
+    row_id: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> MachineProductLibraryRead:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        row = await client.get_by_id(row_id)
+        row = await client.get_by_id(row_id, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -92,9 +99,13 @@ async def get_machine_product(row_id: str) -> MachineProductLibraryRead:
     response_model=MachineProductLibraryRead,
     summary="Get machine product by SN(PID)",
 )
-async def get_machine_product_by_sn(sn_pid: str) -> MachineProductLibraryRead:
+async def get_machine_product_by_sn(
+    sn_pid: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> MachineProductLibraryRead:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        row = await client.get_by_sn(sn_pid)
+        row = await client.get_by_sn(sn_pid, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -109,9 +120,15 @@ async def get_machine_product_by_sn(sn_pid: str) -> MachineProductLibraryRead:
     status_code=status.HTTP_201_CREATED,
     summary="Create machine product",
 )
-async def create_machine_product(payload: MachineProductLibraryCreate) -> MachineProductLibraryRead:
+async def create_machine_product(
+    payload: MachineProductLibraryCreate,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> MachineProductLibraryRead:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        row = await client.create_row(payload.model_dump(exclude_none=True))
+        create_payload = payload.model_dump(exclude_none=True)
+        create_payload["owner_user_id"] = owner_user_id
+        row = await client.create_row(create_payload)
         return MachineProductLibraryRead(**row)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -127,14 +144,17 @@ async def create_machine_product(payload: MachineProductLibraryCreate) -> Machin
     ),
 )
 async def update_machine_product(
-    row_id: str, payload: MachineProductLibraryUpdate
+    row_id: str,
+    payload: MachineProductLibraryUpdate,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
 ) -> MachineProductLibraryRead:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     update_data = payload.model_dump(exclude_none=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided for update")
 
     try:
-        row = await client.update_row(row_id, update_data)
+        row = await client.update_row(row_id, update_data, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -148,9 +168,13 @@ async def update_machine_product(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete machine product",
 )
-async def delete_machine_product(row_id: str) -> None:
+async def delete_machine_product(
+    row_id: str,
+    x_robotx_user_id: str | None = Header(default=None, alias="x-robotx-user-id"),
+) -> None:
+    owner_user_id = parse_user_id_or_401(x_robotx_user_id)
     try:
-        deleted = await client.delete_row(row_id)
+        deleted = await client.delete_row(row_id, owner_user_id=owner_user_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
