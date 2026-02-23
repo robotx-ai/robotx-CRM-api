@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.config import settings
+from app.routers.auth import router as auth_router
 from app.routers.machine_product_library import router as machine_product_library_router
 from app.routers.sales_lead_followups import router as sales_lead_followups_router
 from app.routers.sales_leads import router as sales_leads_router
@@ -27,3 +28,4 @@ app.include_router(machine_product_library_router, prefix=settings.api_prefix)
 app.include_router(store_management_router, prefix=settings.api_prefix)
 app.include_router(sales_leads_router, prefix=settings.api_prefix)
 app.include_router(sales_lead_followups_router, prefix=settings.api_prefix)
+app.include_router(auth_router, prefix=settings.api_prefix)

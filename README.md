@@ -28,11 +28,13 @@ The app loads env vars in this order:
 Required:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 Optional:
 
 - `API_PREFIX` (default `/api/v1`)
+- `FRONTEND_APP_ORIGIN` (default `http://127.0.0.1:3000`)
 
 ## Main Endpoints
 
@@ -67,6 +69,11 @@ Optional:
 - `GET /api/v1/customerCenter/salesLeads/{lead_id}/followups/{followup_id}`
 - `POST /api/v1/customerCenter/salesLeads/{lead_id}/followups`
 - `DELETE /api/v1/customerCenter/salesLeads/{lead_id}/followups/{followup_id}`
+
+## Auth Endpoints
+
+- `GET /api/v1/auth/organization-options`
+- `POST /api/v1/auth/signup/complete`
 
 ## SQL Scripts
 

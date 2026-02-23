@@ -34,16 +34,22 @@ for candidate in _candidate_env_files():
 
 class Settings:
     supabase_url: str
+    supabase_anon_key: str
     supabase_service_role_key: str
     api_prefix: str
+    frontend_origin: str
 
     def __init__(self) -> None:
         self.supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
+        self.supabase_anon_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
         self.supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.api_prefix = os.getenv("API_PREFIX", "/api/v1")
+        self.frontend_origin = os.getenv("FRONTEND_APP_ORIGIN", "http://127.0.0.1:3000").rstrip("/")
 
         if not self.supabase_url:
             raise RuntimeError("Missing NEXT_PUBLIC_SUPABASE_URL.")
+        if not self.supabase_anon_key:
+            raise RuntimeError("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY.")
         if not self.supabase_service_role_key:
             raise RuntimeError("Missing SUPABASE_SERVICE_ROLE_KEY.")
 
