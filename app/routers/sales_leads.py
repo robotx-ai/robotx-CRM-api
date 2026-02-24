@@ -20,6 +20,14 @@ router = APIRouter(prefix="/customerCenter/salesLeads", tags=["Sales Leads"])
 service = SalesLeadsService()
 
 
+def _normalize_sales_lead_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "organization_name": row.get("organization_name") or "Unknown Organization",
+        "customer_type": row.get("customer_type") or "Individual",
+    }
+
+
 @router.get(
     "",
     response_model=SalesLeadListResponse,
@@ -30,7 +38,10 @@ async def list_sales_leads(
     keyword: str | None = Query(default=None),
     status_value: LeadStatus | None = Query(default=None, alias="status"),
     lead_source: LeadSource | None = Query(default=None),
-    location: str | None = Query(default=None),
+    address_keyword: str | None = Query(default=None),
+    city: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    zip_code: str | None = Query(default=None),
     created_date: str | None = Query(default=None, description="YYYY-MM-DD"),
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -45,7 +56,10 @@ async def list_sales_leads(
             keyword=keyword,
             lead_status=status_value,
             lead_source=lead_source,
-            location=location,
+            address_keyword=address_keyword,
+            city=city,
+            state=state,
+            zip_code=zip_code,
             created_date=created_date,
             limit=limit,
             offset=offset,
@@ -60,16 +74,24 @@ async def list_sales_leads(
         if isinstance(owner, list):
             owner = owner[0] if owner else {}
         owner_name = owner.get("full_name") or owner.get("email")
-        item_payload: dict[str, Any] = {
+        item_payload = {
             "id": row.get("id"),
             "owner_user_id": row.get("owner_user_id"),
             "contact_name": row.get("contact_name") or "",
             "contact_email": row.get("contact_email") or "",
             "phone_number": row.get("phone_number"),
+            "organization_name": row.get("organization_name") or "Unknown Organization",
+            "customer_type": row.get("customer_type") or "Individual",
             "interested_product": row.get("interested_product"),
             "message": row.get("message"),
-            "location": row.get("location"),
+            "address": row.get("address"),
+            "city": row.get("city"),
+            "state": row.get("state"),
+            "zip_code": row.get("zip_code"),
             "lead_source": row.get("lead_source") or "Shopify Website",
+            "referrer_name": row.get("referrer_name"),
+            "referrer_phone": row.get("referrer_phone"),
+            "referrer_email": row.get("referrer_email"),
             "source_campaign": row.get("source_campaign"),
             "lead_status": row.get("lead_status") or "Unfollowed",
             "owner_name": owner_name,
@@ -100,7 +122,7 @@ async def get_sales_lead(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales lead not found")
 
-    return SalesLeadRead(**row)
+    return SalesLeadRead(**_normalize_sales_lead_row(row))
 
 
 @router.post(
@@ -122,7 +144,7 @@ async def create_sales_lead(
     except SupabaseRestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return SalesLeadRead(**row)
+    return SalesLeadRead(**_normalize_sales_lead_row(row))
 
 
 @router.patch(
@@ -152,7 +174,7 @@ async def update_sales_lead(
 
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales lead not found")
-    return SalesLeadRead(**row)
+    return SalesLeadRead(**_normalize_sales_lead_row(row))
 
 
 @router.delete(

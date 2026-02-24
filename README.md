@@ -80,3 +80,5 @@ Optional:
 - `sql/001_create_sales_lead_followups.sql`: creates `sales_lead_followups` table.
 - `sql/002_seed_mock_sales_lead_followups.sql`: seeds mock follow-up notes for leads in
   `Following Up` and `Lost` statuses.
+- `sql/003_expand_sales_leads_schema.sql`: expands sales lead fields, statuses, lead sources,
+  and replaces `location` with structured address columns.

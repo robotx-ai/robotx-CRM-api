@@ -91,7 +91,10 @@ class SalesLeadsService:
         keyword: str | None,
         lead_status: str | None,
         lead_source: str | None,
-        location: str | None,
+        address_keyword: str | None,
+        city: str | None,
+        state: str | None,
+        zip_code: str | None,
         created_date: str | None,
         limit: int,
         offset: int,
@@ -100,7 +103,9 @@ class SalesLeadsService:
         params: dict[str, str | int] = {
             "select": (
                 "id,owner_user_id,contact_name,contact_email,phone_number,"
-                "interested_product,message,location,lead_source,source_campaign,"
+                "organization_name,customer_type,interested_product,message,"
+                "address,city,state,zip_code,lead_source,referrer_name,"
+                "referrer_phone,referrer_email,source_campaign,"
                 "lead_status,created_at,updated_at,user_profiles(full_name,email)"
             ),
             "owner_user_id": f"eq.{owner_user_id}",
@@ -113,17 +118,30 @@ class SalesLeadsService:
             escaped = self.escape_keyword(keyword)
             params["or"] = (
                 f"(contact_name.ilike.*{escaped}*,contact_email.ilike.*{escaped}*,"
+                f"organization_name.ilike.*{escaped}*,customer_type.ilike.*{escaped}*,"
                 f"phone_number.ilike.*{escaped}*,interested_product.ilike.*{escaped}*,"
-                f"message.ilike.*{escaped}*)"
+                f"message.ilike.*{escaped}*,address.ilike.*{escaped}*,city.ilike.*{escaped}*,"
+                f"state.ilike.*{escaped}*,zip_code.ilike.*{escaped}*,"
+                f"referrer_name.ilike.*{escaped}*,referrer_phone.ilike.*{escaped}*,"
+                f"referrer_email.ilike.*{escaped}*)"
             )
 
         if lead_status:
             params["lead_status"] = f"eq.{lead_status}"
         if lead_source:
             params["lead_source"] = f"eq.{lead_source}"
-        if location:
-            escaped_location = self.escape_keyword(location)
-            params["location"] = f"ilike.*{escaped_location}*"
+        if address_keyword and "or" not in params:
+            escaped_address = self.escape_keyword(address_keyword)
+            params["or"] = (
+                f"(address.ilike.*{escaped_address}*,city.ilike.*{escaped_address}*,"
+                f"state.ilike.*{escaped_address}*,zip_code.ilike.*{escaped_address}*)"
+            )
+        if city:
+            params["city"] = f"ilike.*{self.escape_keyword(city)}*"
+        if state:
+            params["state"] = f"ilike.*{self.escape_keyword(state)}*"
+        if zip_code:
+            params["zip_code"] = f"ilike.*{self.escape_keyword(zip_code)}*"
         if created_date:
             params["and"] = (
                 f"(created_at.gte.{created_date}T00:00:00Z,"
@@ -141,7 +159,9 @@ class SalesLeadsService:
                 "limit": 1,
                 "select": (
                     "id,owner_user_id,contact_name,contact_email,phone_number,"
-                    "interested_product,message,location,lead_source,source_campaign,"
+                    "organization_name,customer_type,interested_product,message,"
+                    "address,city,state,zip_code,lead_source,referrer_name,"
+                    "referrer_phone,referrer_email,source_campaign,"
                     "lead_status,created_at,updated_at"
                 ),
             },
